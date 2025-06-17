@@ -8,6 +8,7 @@ const Quiz = ({ user }) => {
   const [questions, setQuestions] = useState([]);
   const [documents, setDocuments] = useState([]);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false); // ✅ État de chargement
 
   useEffect(() => {
     const fetchDocuments = async () => {
@@ -22,6 +23,14 @@ const Quiz = ({ user }) => {
   }, []);
 
   const handleSubmit = async () => {
+    if (!fileHash) {
+      setError('Veuillez sélectionner un document.');
+      return;
+    }
+
+    setIsLoading(true); // ✅ Activer le chargement
+    setError(''); // ✅ Réinitialiser les erreurs
+
     try {
       const res = await axios.post('http://localhost:8000/quiz', {
         file_hash: fileHash,
@@ -29,10 +38,11 @@ const Quiz = ({ user }) => {
         bloom_level: bloomLevel || null,
       });
       setQuestions(res.data.questions);
-      setError('');
     } catch (err) {
       setError(err.response?.data?.detail || 'Erreur lors de la génération du quiz.');
       setQuestions([]);
+    } finally {
+      setIsLoading(false); // ✅ Désactiver le chargement dans tous les cas
     }
   };
 
@@ -48,6 +58,7 @@ const Quiz = ({ user }) => {
           value={fileHash}
           onChange={(e) => setFileHash(e.target.value)}
           className="w-full p-2 border rounded mt-1"
+          disabled={isLoading} // ✅ Désactiver pendant le chargement
         >
           <option value="">Sélectionner un document</option>
           {documents.map((doc) => (
@@ -68,6 +79,7 @@ const Quiz = ({ user }) => {
           onChange={(e) => setNumQuestions(e.target.value)}
           className="w-full p-2 border rounded mt-1"
           placeholder="Entrez le nombre de questions (1-10)"
+          disabled={isLoading} // ✅ Désactiver pendant le chargement
         />
       </div>
 
@@ -77,6 +89,7 @@ const Quiz = ({ user }) => {
           value={bloomLevel}
           onChange={(e) => setBloomLevel(e.target.value)}
           className="w-full p-2 border rounded mt-1"
+          disabled={isLoading} // ✅ Désactiver pendant le chargement
         >
           <option value="">Tous les niveaux</option>
           <option value="knowledge">Connaissance</option>
@@ -87,10 +100,41 @@ const Quiz = ({ user }) => {
 
       <button
         onClick={handleSubmit}
-        className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
-        disabled={!fileHash}
+        disabled={!fileHash || isLoading} // ✅ Désactiver si pas de fichier ou en chargement
+        className={`p-2 rounded flex items-center justify-center gap-2 ${
+          !fileHash || isLoading
+            ? 'bg-gray-400 cursor-not-allowed' 
+            : 'bg-blue-500 hover:bg-blue-600'
+        } text-white`}
       >
-        Générer le Quiz
+        {isLoading ? (
+          <>
+            {/* ✅ Icône de rechargement animée */}
+            <svg 
+              className="animate-spin h-4 w-4" 
+              xmlns="http://www.w3.org/2000/svg" 
+              fill="none" 
+              viewBox="0 0 24 24"
+            >
+              <circle 
+                className="opacity-25" 
+                cx="12" 
+                cy="12" 
+                r="10" 
+                stroke="currentColor" 
+                strokeWidth="4"
+              ></circle>
+              <path 
+                className="opacity-75" 
+                fill="currentColor" 
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+            Génération en cours...
+          </>
+        ) : (
+          'Générer le Quiz'
+        )}
       </button>
 
       {questions.length > 0 && (
