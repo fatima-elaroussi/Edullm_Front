@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
 const Quiz = ({ user }) => {
-  const [fileHash, setFileHash] = useState('');
+  const [fileHashes, setFileHashes] = useState([]);
   const [numQuestions, setNumQuestions] = useState(5);
   const [bloomLevel, setBloomLevel] = useState('');
   const [questions, setQuestions] = useState([]);
   const [documents, setDocuments] = useState([]);
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false); // ✅ État de chargement
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const fetchDocuments = async () => {
@@ -23,17 +23,18 @@ const Quiz = ({ user }) => {
   }, []);
 
   const handleSubmit = async () => {
-    if (!fileHash) {
-      setError('Veuillez sélectionner un document.');
+    if (fileHashes.length === 0) {
+      setError('Veuillez sélectionner au moins un document.');
       return;
     }
 
-    setIsLoading(true); // ✅ Activer le chargement
-    setError(''); // ✅ Réinitialiser les erreurs
+    setIsLoading(true);
+    setError('');
+    setQuestions([]);
 
     try {
       const res = await axios.post('http://localhost:8000/quiz', {
-        file_hash: fileHash,
+        file_hashes: fileHashes,
         num_questions: parseInt(numQuestions),
         bloom_level: bloomLevel || null,
       });
@@ -42,7 +43,7 @@ const Quiz = ({ user }) => {
       setError(err.response?.data?.detail || 'Erreur lors de la génération du quiz.');
       setQuestions([]);
     } finally {
-      setIsLoading(false); // ✅ Désactiver le chargement dans tous les cas
+      setIsLoading(false);
     }
   };
 
@@ -53,12 +54,14 @@ const Quiz = ({ user }) => {
       {error && <p className="text-red-500 mb-4">{error}</p>}
 
       <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700">Document</label>
+        <label className="block text-sm font-medium text-gray-700">Documents</label>
         <select
-          value={fileHash}
-          onChange={(e) => setFileHash(e.target.value)}
+          multiple
+          value={fileHashes}
+          onChange={(e) => setFileHashes(Array.from(e.target.selectedOptions, option => option.value))}
           className="w-full p-2 border rounded mt-1"
-          disabled={isLoading} // ✅ Désactiver pendant le chargement
+          disabled={isLoading}
+          size="5"
         >
           <option value="">Sélectionner un document</option>
           {documents.map((doc) => (
@@ -79,7 +82,7 @@ const Quiz = ({ user }) => {
           onChange={(e) => setNumQuestions(e.target.value)}
           className="w-full p-2 border rounded mt-1"
           placeholder="Entrez le nombre de questions (1-10)"
-          disabled={isLoading} // ✅ Désactiver pendant le chargement
+          disabled={isLoading}
         />
       </div>
 
@@ -89,7 +92,7 @@ const Quiz = ({ user }) => {
           value={bloomLevel}
           onChange={(e) => setBloomLevel(e.target.value)}
           className="w-full p-2 border rounded mt-1"
-          disabled={isLoading} // ✅ Désactiver pendant le chargement
+          disabled={isLoading}
         >
           <option value="">Tous les niveaux</option>
           <option value="knowledge">Connaissance</option>
@@ -100,16 +103,15 @@ const Quiz = ({ user }) => {
 
       <button
         onClick={handleSubmit}
-        disabled={!fileHash || isLoading} // ✅ Désactiver si pas de fichier ou en chargement
+        disabled={fileHashes.length === 0 || isLoading}
         className={`p-2 rounded flex items-center justify-center gap-2 ${
-          !fileHash || isLoading
+          fileHashes.length === 0 || isLoading
             ? 'bg-gray-400 cursor-not-allowed' 
             : 'bg-blue-500 hover:bg-blue-600'
         } text-white`}
       >
         {isLoading ? (
           <>
-            {/* ✅ Icône de rechargement animée */}
             <svg 
               className="animate-spin h-4 w-4" 
               xmlns="http://www.w3.org/2000/svg" 
