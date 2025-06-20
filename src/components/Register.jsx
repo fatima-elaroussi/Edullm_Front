@@ -74,7 +74,7 @@ const Register = () => {
 
       if (data.status === 'success') {
         toast.success('Inscription réussie !');
-        navigate('/');
+        navigate('/login');
       }
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Erreur lors de l'inscription");

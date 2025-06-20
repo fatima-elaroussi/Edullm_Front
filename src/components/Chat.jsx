@@ -143,16 +143,16 @@ const Chat = ({ user, setUser }) => {
            
             <div className="flex items-center gap-4">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-medium text-slate-700">{user?.username || user?.name || 'Utilisateur'}</p>
-                <p className="text-xs text-slate-500">{user?.profile_name || 'Étudiant'} • {user?.filiere_name || 'Formation'}</p>
+                {/* <p className="text-sm font-medium text-slate-700">{user?.username || user?.name || 'Utilisateur'}</p>
+                <p className="text-xs text-slate-500">{user?.profile_name || 'Étudiant'} • {user?.filiere_name || 'Formation'}</p> */}
               </div>
-              <button 
+              {/* <button 
                 onClick={handleLogout}
                 className="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-colors duration-200 border border-red-200"
               >
                 <LogOut className="w-4 h-4" />
                 <span className="hidden sm:inline">Déconnexion</span>
-              </button>
+              </button> */}
             </div>
           </div>
         </div>
