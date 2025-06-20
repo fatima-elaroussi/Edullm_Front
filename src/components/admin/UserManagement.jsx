@@ -1,239 +1,261 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Users, 
-  Search, 
-  Filter, 
-  Plus, 
-  Edit2, 
-  Trash2, 
-  Eye,
-  MoreVertical,
-  UserCheck,
-  UserX,
-  X
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Users,
+  Search,
+  Filter,
+  Plus,
+  Edit2,
+  Trash2,
+  X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+/* -------------------------------------------------- */
+/* Helpers                                            */
+/* -------------------------------------------------- */
+const normalizeUser = (raw) => ({
+  user_id: raw.id,                       // mapping API → front
+  username: raw.username,
+  profile_id: raw.profile_id,
+  filiere_id: raw.filiere_id,
+  annee: raw.annee_scolaire ?? '',
+});
+
+const profileLabel = (id) =>
+  ({ 1: 'Étudiant', 2: 'Enseignant', 3: 'Administrateur' }[id] || 'Inconnu');
+
+/* -------------------------------------------------- */
+/* Input & Select sub‑components (focus‑safe)         */
+/* -------------------------------------------------- */
+const Input = ({ label, value, onChange, type = 'text', required }) => (
+  <div>
+    <label className="block mb-1 text-sm font-medium text-gray-700">{label}</label>
+    <input
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      required={required}
+      className="w-full border px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+    />
+  </div>
+);
+
+const Select = ({ label, value, onChange, options }) => (
+  <div>
+    <label className="block mb-1 text-sm font-medium text-gray-700">{label}</label>
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full border px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  </div>
+);
+
+/* -------------------------------------------------- */
+/* Main component                                     */
+/* -------------------------------------------------- */
 const UserManagement = () => {
+  /* ------------------- state --------------------- */
+  const emptyForm = {
+    username: '',
+    password: '',
+    profile_id: '1',      // string pour le select
+    filiere_id: '',
+    annee: String(new Date().getFullYear()),
+  };
+
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterProfile, setFilterProfile] = useState('all');
+
+  const [formData, setFormData] = useState(emptyForm);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [formData, setFormData] = useState({
-    username: '',
-    password: '',
-    profile_id: 1,
-    filiere_id: 1,
-    annee: new Date().getFullYear()
-  });
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  const fetchUsers = async () => {
+  /* ------------------- fetch --------------------- */
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/users');
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data);
-      }
-    } catch (error) {
-      console.error('Error fetching users:', error);
+      const res = await fetch('http://localhost:8000/users');
+      if (!res.ok) throw new Error();
+      const raw = await res.json();
+      setUsers(raw.map(normalizeUser));
+    } catch {
       toast.error('Erreur lors du chargement des utilisateurs');
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  /* ---------------- payload builder -------------- */
+  const buildPayload = () => {
+    const p = {
+      username: formData.username.trim(),
+      profile_id: parseInt(formData.profile_id, 10),
+      annee: formData.annee.trim(),
+    };
+    if (formData.password) p.password = formData.password;
+    if (formData.filiere_id.trim() !== '')
+      p.filiere_id = parseInt(formData.filiere_id, 10);
+    return p;
   };
 
-  const handleDeleteUser = async (userId) => {
-    if (window.confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur?')) {
-      try {
-        const response = await fetch(`http://localhost:8000/users/${userId}`, {
-          method: 'DELETE'
-        });
-        if (response.ok) {
-          setUsers(users.filter(user => user.user_id !== userId));
-          toast.success('Utilisateur supprimé avec succès');
-        }
-      } catch (error) {
-        console.error('Error deleting user:', error);
-        toast.error('Erreur lors de la suppression');
-      }
-    }
-  };
-
+  /* ---------------- CRUD actions ----------------- */
   const handleAddUser = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch('http://localhost:8000/register', {
+      const res = await fetch('http://localhost:8000/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(buildPayload()),
       });
-      
-      if (response.ok) {
-        const result = await response.json();
-        toast.success('Utilisateur ajouté avec succès');
-        setShowAddModal(false);
-        setFormData({ username: '', password: '', profile_id: 1, filiere_id: 1, annee: new Date().getFullYear() });
-        fetchUsers();
-      } else {
-        const error = await response.json();
-        toast.error(error.detail || 'Erreur lors de l\'ajout');
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Erreur API');
       }
-    } catch (error) {
-      console.error('Error adding user:', error);
-      toast.error('Erreur lors de l\'ajout');
+      toast.success('Utilisateur ajouté');
+      setShowAddModal(false);
+      setFormData(emptyForm);
+      fetchUsers();
+    } catch (err) {
+      toast.error(err.message);
     }
   };
 
   const handleEditUser = async (e) => {
     e.preventDefault();
+    if (!selectedUser) return;
     try {
-      const response = await fetch(`http://localhost:8000/users/${selectedUser.user_id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-      
-      if (response.ok) {
-        toast.success('Utilisateur modifié avec succès');
-        setShowEditModal(false);
-        setSelectedUser(null);
-        fetchUsers();
-      } else {
-        const error = await response.json();
-        toast.error(error.detail || 'Erreur lors de la modification');
+      const res = await fetch(
+        `http://localhost:8000/users/${selectedUser.user_id}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(buildPayload()),
+        }
+      );
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Erreur API');
       }
-    } catch (error) {
-      console.error('Error updating user:', error);
-      toast.error('Erreur lors de la modification');
+      toast.success('Utilisateur modifié');
+      setShowEditModal(false);
+      setSelectedUser(null);
+      setFormData(emptyForm);
+      fetchUsers();
+    } catch (err) {
+      toast.error(err.message);
     }
   };
 
-  const openEditModal = (user) => {
-    setSelectedUser(user);
+  const handleDeleteUser = async (id) => {
+    if (!window.confirm('Supprimer cet utilisateur ?')) return;
+    try {
+      const res = await fetch(`http://localhost:8000/users/${id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Utilisateur supprimé');
+      setUsers((u) => u.filter((x) => x.user_id !== id));
+    } catch {
+      toast.error('Erreur lors de la suppression');
+    }
+  };
+
+  /* ---------------- open modal ------------------- */
+  const openEditModal = (u) => {
+    setSelectedUser(u);
     setFormData({
-      username: user.username,
+      username: u.username,
       password: '',
-      profile_id: user.profile_id,
-      filiere_id: user.filiere_id,
-      annee: user.annee
+      profile_id: String(u.profile_id),
+      filiere_id: u.filiere_id ? String(u.filiere_id) : '',
+      annee: u.annee ? String(u.annee) : '',
     });
     setShowEditModal(true);
   };
 
-  const getProfileName = (profileId) => {
-    switch(profileId) {
-      case 1: return 'Étudiant';
-      case 2: return 'Enseignant';
-      case 3: return 'Administrateur';
-      default: return 'Inconnu';
-    }
-  };
-
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.username.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterProfile === 'all' || user.profile_id.toString() === filterProfile;
-    return matchesSearch && matchesFilter;
+  /* ---------------- filtering -------------------- */
+  const filteredUsers = users.filter((u) => {
+    const okSearch = u.username.toLowerCase().includes(searchTerm.toLowerCase());
+    const okFilter =
+      filterProfile === 'all' || String(u.profile_id) === filterProfile;
+    return okSearch && okFilter;
   });
 
-  const UserModal = ({ show, onClose, onSubmit, title, isEdit = false }) => {
-    if (!show) return null;
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg p-6 w-full max-w-md">
+  /* ---------------- modal UI --------------------- */
+  const UserModal = ({ show, onClose, onSubmit, title, isEdit }) =>
+    !show ? null : (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold">{title}</h3>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-              <X className="h-5 w-5" />
+            <button onClick={onClose} className="text-gray-400">
+              <X className="w-5 h-5" />
             </button>
           </div>
-          
+
           <form onSubmit={onSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nom d'utilisateur
-              </label>
-              <input
-                type="text"
-                value={formData.username}
-                onChange={(e) => setFormData({...formData, username: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {isEdit ? 'Nouveau mot de passe (optionnel)' : 'Mot de passe'}
-              </label>
-              <input
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData({...formData, password: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required={!isEdit}
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Profil
-              </label>
-              <select
-                value={formData.profile_id}
-                onChange={(e) => setFormData({...formData, profile_id: parseInt(e.target.value)})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value={1}>Étudiant</option>
-                <option value={2}>Enseignant</option>
-                <option value={3}>Administrateur</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Filière ID
-              </label>
-              <input
-                type="number"
-                value={formData.filiere_id}
-                onChange={(e) => setFormData({...formData, filiere_id: parseInt(e.target.value)})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Année
-              </label>
-              <input
-                type="number"
-                value={formData.annee}
-                onChange={(e) => setFormData({...formData, annee: parseInt(e.target.value)})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            
-            <div className="flex space-x-3 pt-4">
+            <Input
+              label="Nom d’utilisateur"
+              value={formData.username}
+              onChange={(v) => setFormData({ ...formData, username: v })}
+              required
+            />
+            <Input
+              type="password"
+              label={isEdit ? 'Nouveau mot de passe (optionnel)' : 'Mot de passe'}
+              value={formData.password}
+              onChange={(v) => setFormData({ ...formData, password: v })}
+              required={!isEdit}
+            />
+            <Select
+              label="Profil"
+              value={formData.profile_id}
+              onChange={(v) => setFormData({ ...formData, profile_id: v })}
+              options={[
+                { value: '1', label: 'Étudiant' },
+                { value: '2', label: 'Enseignant' },
+                { value: '3', label: 'Administrateur' },
+              ]}
+            />
+            <Input
+              label="Filière ID (optionnel)"
+              type="number"
+              value={formData.filiere_id}
+              onChange={(v) => setFormData({ ...formData, filiere_id: v })}
+            />
+            <Input
+              label="Année"
+              type="number"
+              value={formData.annee}
+              onChange={(v) => setFormData({ ...formData, annee: v })}
+              required
+            />
+
+            <div className="flex gap-3 pt-4">
               <button
                 type="submit"
-                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
               >
                 {isEdit ? 'Modifier' : 'Ajouter'}
               </button>
               <button
                 type="button"
+                className="flex-1 bg-gray-300 py-2 rounded"
                 onClick={onClose}
-                className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
               >
                 Annuler
               </button>
@@ -242,173 +264,153 @@ const UserManagement = () => {
         </div>
       </div>
     );
-  };
 
+  /* ---------------- render ----------------------- */
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin h-8 w-8 rounded-full border-b-2 border-blue-600" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      {/* header */}
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Gestion des Utilisateurs</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Gestion des utilisateurs</h1>
         <button
-          onClick={() => setShowAddModal(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center space-x-2"
+          onClick={() => {
+            setFormData(emptyForm);
+            setShowAddModal(true);
+          }}
+          className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-blue-700"
         >
-          <Plus className="h-4 w-4" />
-          <span>Ajouter Utilisateur</span>
+          <Plus className="w-4 h-4" /> Ajouter
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
-          <div className="flex items-center space-x-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <input
-                type="text"
-                placeholder="Rechercher un utilisateur..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Filter className="h-4 w-4 text-gray-400" />
-              <select
-                value={filterProfile}
-                onChange={(e) => setFilterProfile(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">Tous les profils</option>
-                <option value="1">Étudiants</option>
-                <option value="2">Enseignants</option>
-                <option value="3">Administrateurs</option>
-              </select>
-            </div>
+      {/* filters */}
+      <div className="bg-white border rounded-lg p-4 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center gap-4">
+          <div className="relative w-full md:max-w-xs">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Rechercher..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
-          
-          <div className="text-sm text-gray-600">
-            {filteredUsers.length} utilisateur(s) trouvé(s)
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-gray-400" />
+            <select
+              value={filterProfile}
+              onChange={(e) => setFilterProfile(e.target.value)}
+              className="border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">Tous les profils</option>
+              <option value="1">Étudiants</option>
+              <option value="2">Enseignants</option>
+              <option value="3">Administrateurs</option>
+            </select>
           </div>
+          <span className="text-sm text-gray-600">{filteredUsers.length} utilisateur(s)</span>
         </div>
       </div>
 
-      {/* Users Table */}
-      <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Utilisateur
+      {/* table */}
+      <div className="bg-white border rounded-lg shadow-sm overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              {['Utilisateur', 'Profil', 'Filière', 'Année', 'Actions'].map((h) => (
+                <th
+                  key={h}
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  {h}
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Profil
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Filière
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Année
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredUsers.map((user) => (
-                <tr key={user.user_id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="h-8 w-8 bg-blue-500 rounded-full flex items-center justify-center">
-                        <span className="text-white text-sm font-medium">
-                          {user.username.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="ml-3">
-                        <div className="text-sm font-medium text-gray-900">
-                          {user.username}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          ID: {user.user_id}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      user.profile_id === 3 ? 'bg-red-100 text-red-800' :
-                      user.profile_id === 2 ? 'bg-green-100 text-green-800' :
-                      'bg-blue-100 text-blue-800'
-                    }`}>
-                      {getProfileName(user.profile_id)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {user.filiere_id}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {user.annee}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => openEditModal(user)}
-                        className="text-blue-600 hover:text-blue-900"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteUser(user.user_id)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
               ))}
-            </tbody>
-          </table>
-        </div>
-        
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200 bg-white">
+            {filteredUsers.map((u) => (
+              <tr key={u.user_id} className="hover:bg-gray-50">
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-medium">
+                      {u.username[0].toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">{u.username}</div>
+                      <div className="text-xs text-gray-500">ID : {u.user_id}</div>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span
+                    className={`inline-flex px-2 py-1 text-xs rounded-full font-semibold ${
+                      u.profile_id === 3
+                        ? 'bg-red-100 text-red-800'
+                        : u.profile_id === 2
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-blue-100 text-blue-800'
+                    }`}
+                  >
+                    {profileLabel(u.profile_id)}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">{u.filiere_id || '-'}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">{u.annee || '-'}</td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex gap-2">
+                    <button
+                      className="text-blue-600 hover:text-blue-900"
+                      onClick={() => openEditModal(u)}
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      className="text-red-600 hover:text-red-900"
+                      onClick={() => handleDeleteUser(u.user_id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
         {filteredUsers.length === 0 && (
           <div className="text-center py-8">
-            <Users className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">Aucun utilisateur trouvé</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Aucun utilisateur ne correspond à vos critères de recherche.
-            </p>
+            <Users className="w-12 h-12 mx-auto text-gray-400" />
+            <h3 className="mt-2 text-sm font-medium">Aucun utilisateur</h3>
+            <p className="text-sm text-gray-500">Ajustez vos filtres ou ajoutez un utilisateur.</p>
           </div>
         )}
       </div>
 
-      {/* Modals */}
+      {/* modals */}
       <UserModal
         show={showAddModal}
         onClose={() => setShowAddModal(false)}
         onSubmit={handleAddUser}
         title="Ajouter un utilisateur"
       />
-      
       <UserModal
         show={showEditModal}
         onClose={() => {
           setShowEditModal(false);
           setSelectedUser(null);
+          setFormData(emptyForm);
         }}
         onSubmit={handleEditUser}
-        title="Modifier l'utilisateur"
-        isEdit={true}
+        title="Modifier l’utilisateur"
+        isEdit
       />
     </div>
   );

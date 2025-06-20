@@ -11,17 +11,20 @@ const Quiz = ({ user }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Charger les documents ingérés
   useEffect(() => {
     const fetchDocuments = async () => {
       try {
-        const res = await axios.get('http://localhost:8000/ingested');
+        const res = await axios.get('http://localhost:8000/ingested', {
+          headers: { Authorization: `Bearer ${user?.token}` }
+        });
         setDocuments(res.data);
       } catch (err) {
         setError('❌ Erreur lors du chargement des documents.');
       }
     };
     fetchDocuments();
-  }, []);
+  }, [user?.token]);
 
   const handleSubmit = async () => {
     if (fileHashes.length === 0) {
@@ -34,11 +37,15 @@ const Quiz = ({ user }) => {
     setQuestions([]);
 
     try {
-      const res = await axios.post('http://localhost:8000/quiz', {
-        file_hashes: fileHashes,
-        num_questions: parseInt(numQuestions),
-        bloom_level: bloomLevel || null,
-      });
+      const res = await axios.post(
+        'http://localhost:8000/quiz',
+        {
+          file_hashes: fileHashes,
+          num_questions: parseInt(numQuestions),
+          bloom_level: bloomLevel || null
+        },
+        { headers: { Authorization: `Bearer ${user?.token}` } }
+      );
       setQuestions(res.data.questions);
     } catch (err) {
       setError(err.response?.data?.detail || 'Erreur lors de la génération du quiz.');
@@ -49,18 +56,18 @@ const Quiz = ({ user }) => {
 
   const toggleDocumentSelection = (hash) => {
     setFileHashes((prev) =>
-      prev.includes(hash) ? prev.filter(h => h !== hash) : [...prev, hash]
+      prev.includes(hash) ? prev.filter((h) => h !== hash) : [...prev, hash]
     );
   };
 
   return (
-    <div className=" bg-gradient-to-br from-gray-100 to-white p-6 flex items-center justify-center">
+    <div className="bg-gradient-to-br from-gray-100 to-white p-6 flex items-center justify-center">
       <div className="min-h-screen w-full max-w-7xl bg-white shadow-2xl rounded-2xl p-8">
         <h2 className="text-3xl font-bold text-gray-800 mb-6">📚 Générer un Quiz</h2>
 
         {error && <p className="text-red-600 mb-4">{error}</p>}
 
-        {/* Selected Documents Preview */}
+        {/* Documents sélectionnés */}
         <div className="mb-5">
           <label className="text-gray-700 font-medium mb-1 block">Documents sélectionnés :</label>
           <div className="flex flex-wrap gap-2 mb-2">
@@ -68,8 +75,11 @@ const Quiz = ({ user }) => {
               fileHashes.map((hash) => {
                 const doc = documents.find((d) => d.file_hash === hash);
                 return (
-                  <span key={hash} className="bg-blue-100 text-blue-800 text-sm px-3 py-1 rounded-full shadow">
-                    {doc?.base_filename || hash}
+                  <span
+                    key={hash}
+                    className="bg-blue-100 text-blue-800 text-sm px-3 py-1 rounded-full shadow"
+                  >
+                    {doc?.filename || hash}
                   </span>
                 );
               })
@@ -85,7 +95,7 @@ const Quiz = ({ user }) => {
           </button>
         </div>
 
-        {/* Number of Questions */}
+        {/* Nombre de questions */}
         <div className="mb-5">
           <label className="text-gray-700 font-medium mb-1 block">🔢 Nombre de questions</label>
           <input
@@ -100,9 +110,11 @@ const Quiz = ({ user }) => {
           />
         </div>
 
-        {/* Bloom Level */}
+        {/* Niveau de Bloom */}
         <div className="mb-5">
-          <label className="text-gray-700 font-medium mb-1 block">🎯 Niveau de Bloom (optionnel)</label>
+          <label className="text-gray-700 font-medium mb-1 block">
+            🎯 Niveau de Bloom (optionnel)
+          </label>
           <select
             value={bloomLevel}
             onChange={(e) => setBloomLevel(e.target.value)}
@@ -116,7 +128,7 @@ const Quiz = ({ user }) => {
           </select>
         </div>
 
-        {/* Submit Button */}
+        {/* Bouton de génération */}
         <button
           onClick={handleSubmit}
           disabled={fileHashes.length === 0 || isLoading}
@@ -129,8 +141,19 @@ const Quiz = ({ user }) => {
           {isLoading ? (
             <>
               <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
-                <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8V0C5.3 0 0 5.3 0 12h4z" />
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="white"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="white"
+                  d="M4 12a8 8 0 018-8V0C5.3 0 0 5.3 0 12h4z"
+                />
               </svg>
               Génération en cours...
             </>
@@ -139,7 +162,7 @@ const Quiz = ({ user }) => {
           )}
         </button>
 
-        {/* Questions Display (chat-style) */}
+        {/* Questions générées */}
         {questions.length > 0 && (
           <div className="mt-8 space-y-6">
             <h3 className="text-xl font-semibold mb-4">💬 Questions générées :</h3>
@@ -152,7 +175,8 @@ const Quiz = ({ user }) => {
                   QuizBot
                 </div>
                 <p className="font-semibold mb-2">
-                  {index + 1}. {q.question} <span className="text-sm text-gray-500">({q.bloom_level})</span>
+                  {index + 1}. {q.question}{' '}
+                  <span className="text-sm text-gray-500">({q.bloom_level})</span>
                 </p>
                 <ul className="list-disc pl-5 space-y-1">
                   {q.options.map((option, i) => (
@@ -171,22 +195,27 @@ const Quiz = ({ user }) => {
         )}
       </div>
 
-      {/* Modal */}
+      {/* Modal de sélection des documents */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black bg-opacity-40 flex items-center justify-center px-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6">
-            <h3 className="text-xl font-semibold text-gray-800 mb-4">📂 Sélectionnez vos documents</h3>
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">
+              📂 Sélectionnez vos documents
+            </h3>
             <div className="max-h-60 overflow-y-auto border rounded p-3">
               {documents.length > 0 ? (
                 documents.map((doc) => (
-                  <label key={doc.file_hash} className="block cursor-pointer mb-2 text-gray-700">
+                  <label
+                    key={doc.file_hash}
+                    className="block cursor-pointer mb-2 text-gray-700"
+                  >
                     <input
                       type="checkbox"
                       checked={fileHashes.includes(doc.file_hash)}
                       onChange={() => toggleDocumentSelection(doc.file_hash)}
                       className="mr-2"
                     />
-                    {doc.base_filename}
+                    {doc.filename}
                   </label>
                 ))
               ) : (

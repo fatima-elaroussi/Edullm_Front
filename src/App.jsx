@@ -23,7 +23,8 @@ import Recommend from './components/Recommend';
 import Profile from './components/Profile';
 import Documents from './components/Documents';
 import Statistics from './components/Statistics';
-
+import statistics from './components/admin/statistics';
+import Settings from './components/admin/settings';
 // Admin Components
 import AdminDashboard from './components/admin/AdminDashboard';
 import UserManagement from './components/admin/UserManagement';
@@ -90,6 +91,8 @@ function App() {
               <Route path="users" element={<UserManagement />} />
               <Route path="resources" element={<ResourceManagement />} />
               <Route path="documents" element={<DocumentManagement />} />
+              <Route path="statistics" element={<Statistics />} />
+              <Route path="settings" element={<Settings />} />
             </Route>
           </Routes>
           
