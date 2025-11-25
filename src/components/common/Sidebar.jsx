@@ -82,7 +82,7 @@ const Sidebar = ({ isOpen, onToggle, user }) => {
           <div className="text-sm text-gray-600">
             <p className="font-medium">{user?.username}</p>
             <p className="text-xs text-gray-500">
-              {user?.profile_id === 1 ? 'Étudiant' : 
+              {user?.profile_id === 3 ? 'Étudiant' : 
                user?.profile_id === 2 ? 'Enseignant' : 'Administrateur'}
             </p>
           </div>
